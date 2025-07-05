@@ -3,10 +3,11 @@ package org.firstinspires.ftc.teamcode.disabledSamples;
 import com.github.bouyio.cyancore.debugger.DebugPacket;
 import com.github.bouyio.cyancore.debugger.Debuggers;
 import com.github.bouyio.cyancore.debugger.Logger;
-import com.github.bouyio.cyancore.geomery.Pose2D;
-import com.github.bouyio.cyancore.geomery.SmartVector;
+import com.github.bouyio.cyancore.geomery.Point;
 import com.github.bouyio.cyancore.localization.TankKinematics;
+import com.github.bouyio.cyancore.pathing.PathFollower;
 import com.github.bouyio.cyancore.util.Distance;
+import com.github.bouyio.cyancore.util.PIDCoefficients;
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -15,14 +16,12 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
 /**
  * <p>
- *     This class demonstrates localization in CyanFTC using kinematic formulas.
- *     Its difference with the legacy version is that it increases accuracy with mid-cycle position
- *     updating and distance unit safety.
+ *     This class demonstrates <strong>single</strong> point following in CyanFTC.
  * </p>
  * */
 @Disabled
 @TeleOp()
-public class TankKinematicsLocalization extends OpMode {
+public class PointFollowing extends OpMode {
 
     // TODO: Set constants to match the ones of the robot
     // NOTE: The distance unit of the track width must be
@@ -33,22 +32,21 @@ public class TankKinematicsLocalization extends OpMode {
     final double ENCODER_COUNT_PER_REVOLUTION = 000000000;
     final double TICKS_TO_LINEAR_DISTANCE = 2 * Math.PI * WHEEL_RADIUS / ENCODER_COUNT_PER_REVOLUTION;
 
-
-    // TODO: Set the init position coordinates and heading.
-    double INITIAL_POS_X = 0000000000;
-    double INITIAL_POS_Y = 0000000000;
-    double INITIAL_HEADING = 000000000;
-
-
     /**The localization system.*/
     TankKinematics odometry;
 
-    // The motors whose encoders we will be using.
+    /**The point following system.*/
+    PathFollower follower;
+
+    // The motors we will be using.
     DcMotor leftMotor;
     DcMotor rightMotor;
 
     /**The logging system.*/
     Logger logger;
+
+    /**The point used for point following demonstration.*/
+    Point point;
 
     @Override
     public void init() {
@@ -58,42 +56,68 @@ public class TankKinematicsLocalization extends OpMode {
         rightMotor.setDirection(DcMotorSimple.Direction.REVERSE);
 
         // Initializing localization system.
-
-        // Initial position coordinates of the robot with a their distance unit.
-        SmartVector initialRobotPosition = new SmartVector(
-                Distance.DistanceUnit.CM,
-                INITIAL_POS_X,
-                INITIAL_POS_Y
-                );
-
-        // Initializing the measurement provider for the localization system.
         TankKinematics.TankKinematicsMeasurementProvider measurementProvider = new TankKinematics.TankKinematicsMeasurementProvider(
                 leftMotor::getCurrentPosition,
                 rightMotor::getCurrentPosition,
                 TICKS_TO_LINEAR_DISTANCE
         );
 
-        // Initializing the localization system itself.
-        odometry = new TankKinematics(initialRobotPosition, INITIAL_HEADING, TRACK_WIDTH, measurementProvider);
+        odometry = new TankKinematics(TRACK_WIDTH, Distance.DistanceUnit.CM, measurementProvider);
 
-        // Initializing localization system logging;\.
+        // Initializing the point following system.
+
+        // Initializing the steering PID controller coefficients.
+        // TODO: Tune the controller and set the actual coefficient.
+        PIDCoefficients coefficients = new PIDCoefficients();
+        coefficients.kP = 0000000;
+        coefficients.kD = 0000000;
+        coefficients.kI = 0000000;
+
+        // Initializing the point follower itself.
+        follower = new PathFollower(odometry);
+
+        // Configuring the follower.
+        // TODO: Set the preferred distance unit.
+        follower.setDistanceUnitOfMeasurement(Distance.DistanceUnit.CM);
+
+        // Initializing the point.
+        // TODO: Set the actual coordinates of the point.
+        point = new Point(000000, 000000);
+
+        // Initializing localization system logging.
         logger = Debuggers.getGlobalLogger();
         odometry.attachLogger(logger);
+        follower.attachLogger(logger);
+
     }
 
     @Override
     public void loop() {
 
-        // Updating the calculations of the localization system.
-        // This is NOT NECESSARY since it is usually being done automatically.
-        odometry.update();
+        // Point following code.
 
-        // Getting the pose of the robot.
-        // This is NOT NECESSARY since it is usually being done automatically.
-        Pose2D pose = odometry.getPose();
+        // Setting the target.
+        follower.followPoint(point);
+
+        // Getting the movement instruction from the follower.
+        double[] movementPowerInstructions = follower.getCalculatedPowers();
+
+        // Converting them to movement powers.
+        double leftMotorPower = movementPowerInstructions[0] + movementPowerInstructions[1];
+        double rightMotorPower = movementPowerInstructions[0] - movementPowerInstructions[1];
+
+        // Normalizing motor powers.
+        double max = Math.max(leftMotorPower, rightMotorPower);
+        leftMotorPower /= max;
+        rightMotorPower /= max;
+
+        // Applying the motor powers.
+        leftMotor.setPower(leftMotorPower);
+        rightMotor.setPower(rightMotorPower);
 
         // Updating the debug information.
         odometry.debug();
+        follower.debug();
 
         // Retrieving and displaying the debug information.
         DebugPacket[] loggerPackets = logger.dump();

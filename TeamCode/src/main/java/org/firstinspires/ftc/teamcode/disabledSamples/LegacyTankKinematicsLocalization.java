@@ -9,7 +9,7 @@ import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.hardware.IMU;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
 /**
  * <p>
@@ -51,6 +51,7 @@ public class LegacyTankKinematicsLocalization extends OpMode {
         // Initializing hardware.
         leftMotor = hardwareMap.get(DcMotor.class, "left_motor");
         rightMotor = hardwareMap.get(DcMotor.class, "right_motor");
+        rightMotor.setDirection(DcMotorSimple.Direction.REVERSE);
 
         // Initializing localization system.
         odometry = new LegacyTankKinematics(INITIAL_POS_X, INITIAL_POS_Y, INITIAL_HEADING, TRACK_WIDTH);
