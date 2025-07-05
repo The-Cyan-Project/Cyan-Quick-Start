@@ -1,3 +1,12 @@
+## Notice
+
+We have added some code samples in order to showcase the features of CyanFTC and aid with starting the development.
+They are located in the `disabledSamples` package and are annotated as `@Disabled`.
+Thank you for choosing us.
+
+Sincerely,
+The Cyan Project Team
+
 ## TeamCode Module
 
 Welcome!
