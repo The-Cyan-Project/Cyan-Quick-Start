@@ -1,5 +1,8 @@
 ## NOTICE
 
+This repository contains the library CyanFTC.
+More information about the licencing can read [here](https://github.com/bouyio/Cyan-FTC/blob/main/LICENSE.txt)
+
 This repository contains the public FTC SDK for the INTO THE DEEP (2024-2025) competition season.
 
 ## Welcome!
