@@ -67,7 +67,7 @@ public class TankKinematicsLocalization extends OpMode {
                 );
 
         // Initializing the measurement provider for the localization system.
-        TankKinematics.TankKinematicsMeasurementProvider measurementProvider = new TankKinematics.TankKinematicsMeasurementProvider(
+        TankKinematics.MeasurementProvider measurementProvider = new TankKinematics.MeasurementProvider(
                 leftMotor::getCurrentPosition,
                 rightMotor::getCurrentPosition,
                 TICKS_TO_LINEAR_DISTANCE

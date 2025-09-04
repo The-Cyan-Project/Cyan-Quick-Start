@@ -74,7 +74,7 @@ public class GyroscopeLocalization extends OpMode {
                 );
 
         // Initializing the measurement provider for the localization system.
-        GyroTankOdometry.GyroTankMeasurementProvider measurementProvider = new GyroTankOdometry.GyroTankMeasurementProvider(
+        GyroTankOdometry.MeasurementProvider measurementProvider = new GyroTankOdometry.MeasurementProvider(
                 leftMotor::getCurrentPosition,
                 rightMotor::getCurrentPosition,
                 imu.getRobotYawPitchRollAngles()::getYaw,

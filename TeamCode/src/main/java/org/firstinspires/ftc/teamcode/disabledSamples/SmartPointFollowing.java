@@ -59,7 +59,7 @@ public class SmartPointFollowing extends OpMode {
         rightMotor.setDirection(DcMotorSimple.Direction.REVERSE);
 
         // Initializing localization system.
-        TankKinematics.TankKinematicsMeasurementProvider measurementProvider = new TankKinematics.TankKinematicsMeasurementProvider(
+        TankKinematics.MeasurementProvider measurementProvider = new TankKinematics.MeasurementProvider(
                 leftMotor::getCurrentPosition,
                 rightMotor::getCurrentPosition,
                 TICKS_TO_LINEAR_DISTANCE
