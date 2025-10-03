@@ -4,7 +4,7 @@ import com.github.bouyio.cyancore.debugger.DebugPacket;
 import com.github.bouyio.cyancore.debugger.Debuggers;
 import com.github.bouyio.cyancore.debugger.Logger;
 import com.github.bouyio.cyancore.geomery.Pose2D;
-import com.github.bouyio.cyancore.geomery.SmartVector;
+import com.github.bouyio.cyancore.geomery.SmartPoint;
 import com.github.bouyio.cyancore.localization.GyroTankOdometry;
 import com.github.bouyio.cyancore.util.Distance;
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
@@ -67,7 +67,7 @@ public class GyroscopeLocalization extends OpMode {
         // Initializing localization system.
 
         // Initial position coordinates of the robot with a their distance unit.
-        SmartVector initialRobotPosition = new SmartVector(
+        SmartPoint initialRobotPosition = new SmartPoint(
                 Distance.DistanceUnit.CM,
                 INITIAL_POS_X,
                 INITIAL_POS_Y

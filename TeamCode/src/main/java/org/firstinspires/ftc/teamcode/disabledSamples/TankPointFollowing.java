@@ -4,9 +4,9 @@ import com.github.bouyio.cyancore.debugger.DebugPacket;
 import com.github.bouyio.cyancore.debugger.Debuggers;
 import com.github.bouyio.cyancore.debugger.Logger;
 import com.github.bouyio.cyancore.geomery.Point;
-import com.github.bouyio.cyancore.geomery.SmartPoint;
 import com.github.bouyio.cyancore.localization.TankKinematics;
-import com.github.bouyio.cyancore.pathing.PathFollower;
+import com.github.bouyio.cyancore.pathing.engine.PathFollower;
+import com.github.bouyio.cyancore.pathing.engine.TankDriveVectorInterpreter;
 import com.github.bouyio.cyancore.util.Distance;
 import com.github.bouyio.cyancore.util.PIDCoefficients;
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
@@ -17,14 +17,12 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
 /**
  * <p>
- *     This class demonstrates <strong>single</strong> smart point following in CyanFTC.
- *     The advantage of using smart points instead of normal ones is the distance unit
- *     certainty and safety.
+ *     This class demonstrates <strong>single</strong> point following in CyanFTC.
  * </p>
  * */
 @Disabled
 @TeleOp()
-public class SmartPointFollowing extends OpMode {
+public class TankPointFollowing extends OpMode {
 
     // TODO: Set constants to match the ones of the robot
     // NOTE: The distance unit of the track width must be
@@ -48,8 +46,8 @@ public class SmartPointFollowing extends OpMode {
     /**The logging system.*/
     Logger logger;
 
-    /**The smart point used for point following demonstration.*/
-    SmartPoint point;
+    /**The point used for point following demonstration.*/
+    Point point;
 
     @Override
     public void init() {
@@ -67,25 +65,23 @@ public class SmartPointFollowing extends OpMode {
 
         odometry = new TankKinematics(TRACK_WIDTH, Distance.DistanceUnit.CM, measurementProvider);
 
-        // Initializing the point following system.
-
-        // Initializing the steering PID controller coefficients.
-        // TODO: Tune the controller and set the actual coefficient.
-        PIDCoefficients coefficients = new PIDCoefficients();
-        coefficients.kP = 0000000;
-        coefficients.kD = 0000000;
-        coefficients.kI = 0000000;
+        // Initializing the vector interpreter.
+        // TODO: See if the reverse fits your use case.
+        // TODO: If not change the constructor parameter to false.
+        TankDriveVectorInterpreter vectorInterpreter =
+                new TankDriveVectorInterpreter(true);
 
         // Initializing the point follower itself.
-        follower = new PathFollower(odometry);
+        follower = new PathFollower(odometry, vectorInterpreter);
+
 
         // Configuring the follower.
         // TODO: Set the preferred distance unit.
         follower.setDistanceUnitOfMeasurement(Distance.DistanceUnit.CM);
 
         // Initializing the point.
-        // TODO: Set the actual coordinates and distance unit of the point.
-        point = new SmartPoint(Distance.DistanceUnit.CM, 000000, 000000);
+        // TODO: Set the actual coordinates of the point.
+        point = new Point(000000, 000000);
 
         // Initializing localization system logging.
         logger = Debuggers.getGlobalLogger();
@@ -100,23 +96,14 @@ public class SmartPointFollowing extends OpMode {
         // Point following code.
 
         // Setting the target.
-        follower.followSmartPoint(point);
+        follower.followPoint(point);
 
         // Getting the movement instruction from the follower.
-        double[] movementPowerInstructions = follower.getCalculatedPowers();
-
-        // Converting them to movement powers.
-        double leftMotorPower = movementPowerInstructions[0] + movementPowerInstructions[1];
-        double rightMotorPower = movementPowerInstructions[0] - movementPowerInstructions[1];
-
-        // Normalizing motor powers.
-        double max = Math.max(leftMotorPower, rightMotorPower);
-        leftMotorPower /= max;
-        rightMotorPower /= max;
+        double[] motorPowers = follower.getCalculatedPowers();
 
         // Applying the motor powers.
-        leftMotor.setPower(leftMotorPower);
-        rightMotor.setPower(rightMotorPower);
+        leftMotor.setPower(motorPowers[TankDriveVectorInterpreter.LEFT_MOTOR_INDEX_ID]);
+        rightMotor.setPower(motorPowers[TankDriveVectorInterpreter.RIGHT_MOTOR_INDEX_ID]);
 
         // Updating the debug information.
         odometry.debug();

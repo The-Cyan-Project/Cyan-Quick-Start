@@ -5,9 +5,12 @@ import com.github.bouyio.cyancore.debugger.Debuggers;
 import com.github.bouyio.cyancore.debugger.Logger;
 import com.github.bouyio.cyancore.geomery.Point;
 import com.github.bouyio.cyancore.localization.TankKinematics;
-import com.github.bouyio.cyancore.pathing.PathFollower;
+import com.github.bouyio.cyancore.pathing.Path;
+import com.github.bouyio.cyancore.pathing.engine.PathFollower;
+import com.github.bouyio.cyancore.pathing.engine.TankDriveVectorInterpreter;
 import com.github.bouyio.cyancore.util.Distance;
 import com.github.bouyio.cyancore.util.PIDCoefficients;
+import com.github.bouyio.cyancore.util.PIDController;
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -16,12 +19,25 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
 /**
  * <p>
- *     This class demonstrates <strong>single</strong> point following in CyanFTC.
+ *     This class demonstrates path following in CyanFTC.
+ *     The way path following differs from point sequencing is that it much smoother.
+ *     This is achieved by dynamically adjusting the targeted point.
  * </p>
  * */
 @Disabled
 @TeleOp()
-public class PointFollowing extends OpMode {
+public class TankPathFollowing extends OpMode {
+
+    // TODO: Set the path following configurations.
+    // NOTE: Tuning look ahead distance is very simple.
+    // The greater the value is smoother the following gets
+    // at the expense of some accuracy.
+    final double LOOK_AHEAD_DISTANCE = 000000000;
+
+    // NOTE: Once again the greater the value of admissible
+    // point error is the smoother the following gets at the
+    // expense of some accuracy.
+    final double ADMISSIBLE_POINT_ERROR = 000000000;
 
     // TODO: Set constants to match the ones of the robot
     // NOTE: The distance unit of the track width must be
@@ -35,7 +51,7 @@ public class PointFollowing extends OpMode {
     /**The localization system.*/
     TankKinematics odometry;
 
-    /**The point following system.*/
+    /**The sequence following system.*/
     PathFollower follower;
 
     // The motors we will be using.
@@ -45,8 +61,8 @@ public class PointFollowing extends OpMode {
     /**The logging system.*/
     Logger logger;
 
-    /**The point used for point following demonstration.*/
-    Point point;
+    /**The sequence used for point following demonstration.*/
+    Path path;
 
     @Override
     public void init() {
@@ -64,7 +80,7 @@ public class PointFollowing extends OpMode {
 
         odometry = new TankKinematics(TRACK_WIDTH, Distance.DistanceUnit.CM, measurementProvider);
 
-        // Initializing the point following system.
+        // Initializing the sequence following system.
 
         // Initializing the steering PID controller coefficients.
         // TODO: Tune the controller and set the actual coefficient.
@@ -73,16 +89,30 @@ public class PointFollowing extends OpMode {
         coefficients.kD = 0000000;
         coefficients.kI = 0000000;
 
-        // Initializing the point follower itself.
-        follower = new PathFollower(odometry);
+        // Initializing the vector interpreter.
+        // TODO: See if the reverse fits your use case.
+        // TODO: If not change the constructor parameter to false.
+        TankDriveVectorInterpreter vectorInterpreter =
+                new TankDriveVectorInterpreter(true);
 
-        // Configuring the follower.
+        // Initializing the path follower itself.
+        follower = new PathFollower(odometry, vectorInterpreter, new PIDController(coefficients));
+
+        // Configuring follower.
         // TODO: Set the preferred distance unit.
+        follower.purePursuitSetUp(LOOK_AHEAD_DISTANCE, ADMISSIBLE_POINT_ERROR);
         follower.setDistanceUnitOfMeasurement(Distance.DistanceUnit.CM);
 
-        // Initializing the point.
-        // TODO: Set the actual coordinates of the point.
-        point = new Point(000000, 000000);
+        // Initializing the sequence.
+        // TODO: Set the actual coordinates of the points.
+        // TODO: Use as many point as it is necessary.
+        path = new Path(
+                new Point(0000000, 0000000),
+                new Point(0000000, 0000000),
+                new Point(0000000, 0000000),
+                new Point(0000000, 0000000),
+                new Point(0000000, 0000000)
+        );
 
         // Initializing localization system logging.
         logger = Debuggers.getGlobalLogger();
@@ -97,23 +127,14 @@ public class PointFollowing extends OpMode {
         // Point following code.
 
         // Setting the target.
-        follower.followPoint(point);
+        follower.followPath(path);
 
         // Getting the movement instruction from the follower.
-        double[] movementPowerInstructions = follower.getCalculatedPowers();
-
-        // Converting them to movement powers.
-        double leftMotorPower = movementPowerInstructions[0] + movementPowerInstructions[1];
-        double rightMotorPower = movementPowerInstructions[0] - movementPowerInstructions[1];
-
-        // Normalizing motor powers.
-        double max = Math.max(leftMotorPower, rightMotorPower);
-        leftMotorPower /= max;
-        rightMotorPower /= max;
+        double[] motorPowers = follower.getCalculatedPowers();
 
         // Applying the motor powers.
-        leftMotor.setPower(leftMotorPower);
-        rightMotor.setPower(rightMotorPower);
+        leftMotor.setPower(motorPowers[TankDriveVectorInterpreter.LEFT_MOTOR_INDEX_ID]);
+        rightMotor.setPower(motorPowers[TankDriveVectorInterpreter.RIGHT_MOTOR_INDEX_ID]);
 
         // Updating the debug information.
         odometry.debug();

@@ -4,11 +4,14 @@ import com.github.bouyio.cyancore.debugger.DebugPacket;
 import com.github.bouyio.cyancore.debugger.Debuggers;
 import com.github.bouyio.cyancore.debugger.Logger;
 import com.github.bouyio.cyancore.geomery.Point;
-import com.github.bouyio.cyancore.localization.TankKinematics;
+import com.github.bouyio.cyancore.geomery.SmartPoint;
+import com.github.bouyio.cyancore.localization.ThreeDeadWheelOdometry;
 import com.github.bouyio.cyancore.pathing.Path;
-import com.github.bouyio.cyancore.pathing.PathFollower;
+import com.github.bouyio.cyancore.pathing.engine.MecanumDriveVectorInterpreter;
+import com.github.bouyio.cyancore.pathing.engine.PathFollower;
 import com.github.bouyio.cyancore.util.Distance;
 import com.github.bouyio.cyancore.util.PIDCoefficients;
+import com.github.bouyio.cyancore.util.PIDController;
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -24,7 +27,7 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
  * */
 @Disabled
 @TeleOp()
-public class PathFollowing extends OpMode {
+public class MecanumSmartPathFollowing extends OpMode {
 
     // TODO: Set the path following configurations.
     // NOTE: Tuning look ahead distance is very simple.
@@ -41,42 +44,65 @@ public class PathFollowing extends OpMode {
     // NOTE: The distance unit of the track width must be
     // the same as the distance unit of the converted motor
     // rotations.
-    final double TRACK_WIDTH = 0000000000;
+    final double ENCODER_WIDTH = 0000000000;
     final double WHEEL_RADIUS = 000000000;
     final double ENCODER_COUNT_PER_REVOLUTION = 000000000;
     final double TICKS_TO_LINEAR_DISTANCE = 2 * Math.PI * WHEEL_RADIUS / ENCODER_COUNT_PER_REVOLUTION;
 
     /**The localization system.*/
-    TankKinematics odometry;
+    ThreeDeadWheelOdometry odometry;
+
+    // The encoders we will be using.
+    DcMotor leftParallelEncoder;
+    DcMotor rightParallelEncoder;
+    DcMotor perpendicularEncoder;
 
     /**The sequence following system.*/
     PathFollower follower;
 
     // The motors we will be using.
-    DcMotor leftMotor;
-    DcMotor rightMotor;
+    DcMotor leftFrontMotor;
+    DcMotor leftBackMotor;
+    DcMotor rightFrontMotor;
+    DcMotor rightBackMotor;
 
     /**The logging system.*/
     Logger logger;
 
-    /**The sequence used for point following demonstration.*/
-    Path path;
+
+    /**The smart point used for point following demonstration.*/
+    SmartPoint point;
 
     @Override
     public void init() {
         // Initializing hardware.
-        leftMotor = hardwareMap.get(DcMotor.class, "left_motor");
-        rightMotor = hardwareMap.get(DcMotor.class, "right_motor");
-        rightMotor.setDirection(DcMotorSimple.Direction.REVERSE);
+        leftFrontMotor = hardwareMap.get(DcMotor.class, "left_front_motor");
+        leftBackMotor = hardwareMap.get(DcMotor.class, "left_back_motor");
+        rightFrontMotor = hardwareMap.get(DcMotor.class, "right_front_motor");
+        rightBackMotor = hardwareMap.get(DcMotor.class, "right_back_motor");
+        rightFrontMotor.setDirection(DcMotorSimple.Direction.REVERSE);
+        rightBackMotor.setDirection(DcMotorSimple.Direction.REVERSE);
 
-        // Initializing localization system.
-        TankKinematics.MeasurementProvider measurementProvider = new TankKinematics.MeasurementProvider(
-                leftMotor::getCurrentPosition,
-                rightMotor::getCurrentPosition,
+        leftParallelEncoder = hardwareMap.get(DcMotor.class, "left_y_encoder");
+        rightParallelEncoder = hardwareMap.get(DcMotor.class, "right_y_encoder");
+        perpendicularEncoder = hardwareMap.get(DcMotor.class, "x_encoder");
+
+        // TODO: Reverse if necessary.
+        //leftParallelEncoder.setDirection(DcMotorSimple.Direction.REVERSE);
+        //rightParallelEncoder.setDirection(DcMotorSimple.Direction.REVERSE);
+        //perpendicularEncoder.setDirection(DcMotorSimple.Direction.REVERSE);
+
+
+        // Initializing the measurement provider for the localization system.
+        ThreeDeadWheelOdometry.MeasurementProvider measurementProvider = new ThreeDeadWheelOdometry.MeasurementProvider(
+                perpendicularEncoder::getCurrentPosition,
+                leftParallelEncoder::getCurrentPosition,
+                rightParallelEncoder::getCurrentPosition,
                 TICKS_TO_LINEAR_DISTANCE
         );
 
-        odometry = new TankKinematics(TRACK_WIDTH, Distance.DistanceUnit.CM, measurementProvider);
+        // Initializing the localization system itself.
+        odometry = new ThreeDeadWheelOdometry(ENCODER_WIDTH, Distance.DistanceUnit.CM, measurementProvider);
 
         // Initializing the sequence following system.
 
@@ -87,24 +113,23 @@ public class PathFollowing extends OpMode {
         coefficients.kD = 0000000;
         coefficients.kI = 0000000;
 
-        // Initializing the sequence follower itself.
-        follower = new PathFollower(odometry);
+        // Initializing the vector interpreter.
+        // TODO: See if the reverse fits your use case.
+        // TODO: If not change the constructor parameter to false.
+        MecanumDriveVectorInterpreter vectorInterpreter =
+                new MecanumDriveVectorInterpreter();
+
+        // Initializing the path follower itself.
+        follower = new PathFollower(odometry, vectorInterpreter, new PIDController(coefficients));
 
         // Configuring follower.
         // TODO: Set the preferred distance unit.
         follower.purePursuitSetUp(LOOK_AHEAD_DISTANCE, ADMISSIBLE_POINT_ERROR);
         follower.setDistanceUnitOfMeasurement(Distance.DistanceUnit.CM);
 
-        // Initializing the sequence.
-        // TODO: Set the actual coordinates of the points.
-        // TODO: Use as many point as it is necessary.
-        path = new Path(
-                new Point(0000000, 0000000),
-                new Point(0000000, 0000000),
-                new Point(0000000, 0000000),
-                new Point(0000000, 0000000),
-                new Point(0000000, 0000000)
-        );
+        // Initializing the point.
+        // TODO: Set the actual coordinates and distance unit of the point.
+        point = new SmartPoint(Distance.DistanceUnit.CM, 000000, 000000);
 
         // Initializing localization system logging.
         logger = Debuggers.getGlobalLogger();
@@ -119,23 +144,16 @@ public class PathFollowing extends OpMode {
         // Point following code.
 
         // Setting the target.
-        follower.followPath(path);
+        follower.followSmartPoint(point);
 
         // Getting the movement instruction from the follower.
-        double[] movementPowerInstructions = follower.getCalculatedPowers();
-
-        // Converting them to movement powers.
-        double leftMotorPower = movementPowerInstructions[0] + movementPowerInstructions[1];
-        double rightMotorPower = movementPowerInstructions[0] - movementPowerInstructions[1];
-
-        // Normalizing motor powers.
-        double max = Math.max(leftMotorPower, rightMotorPower);
-        leftMotorPower /= max;
-        rightMotorPower /= max;
+        double[] motorPowers = follower.getCalculatedPowers();
 
         // Applying the motor powers.
-        leftMotor.setPower(leftMotorPower);
-        rightMotor.setPower(rightMotorPower);
+        leftFrontMotor.setPower(motorPowers[MecanumDriveVectorInterpreter.LEFT_FRONT_MOTOR_ID]);
+        leftBackMotor.setPower(motorPowers[MecanumDriveVectorInterpreter.LEFT_BACK_MOTOR_ID]);
+        rightFrontMotor.setPower(motorPowers[MecanumDriveVectorInterpreter.RIGHT_FRONT_MOTOR_ID]);
+        rightBackMotor.setPower(motorPowers[MecanumDriveVectorInterpreter.RIGHT_BACK_MOTOR_ID]);
 
         // Updating the debug information.
         odometry.debug();

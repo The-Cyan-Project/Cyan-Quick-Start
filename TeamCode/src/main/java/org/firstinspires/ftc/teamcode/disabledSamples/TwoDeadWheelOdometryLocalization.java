@@ -5,33 +5,27 @@ import com.github.bouyio.cyancore.debugger.Debuggers;
 import com.github.bouyio.cyancore.debugger.Logger;
 import com.github.bouyio.cyancore.geomery.Pose2D;
 import com.github.bouyio.cyancore.geomery.SmartPoint;
-import com.github.bouyio.cyancore.localization.TankKinematics;
+import com.github.bouyio.cyancore.localization.TwoDeadWheelOdometry;
 import com.github.bouyio.cyancore.util.Distance;
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.IMU;
 
 /**
  * <p>
- *     This class demonstrates localization in CyanFTC using kinematic formulas.
- *     Its difference with the legacy version is that it increases accuracy with mid-cycle position
- *     updating and distance unit safety.
+ *     This class demonstrates localization in CyanFTC using two dead wheel and the IMU interface.
  * </p>
  * */
 @Disabled
 @TeleOp()
-public class TankKinematicsLocalization extends OpMode {
+public class TwoDeadWheelOdometryLocalization extends OpMode {
 
     // TODO: Set constants to match the ones of the robot
-    // NOTE: The distance unit of the track width must be
-    // the same as the distance unit of the converted motor
-    // rotations.
-    final double TRACK_WIDTH = 0000000000;
-    final double WHEEL_RADIUS = 000000000;
+    final double ENCODER_WHEEL_RADIUS = 000000000;
     final double ENCODER_COUNT_PER_REVOLUTION = 000000000;
-    final double TICKS_TO_LINEAR_DISTANCE = 2 * Math.PI * WHEEL_RADIUS / ENCODER_COUNT_PER_REVOLUTION;
+    final double TICKS_TO_LINEAR_DISTANCE = 2 * Math.PI * ENCODER_WHEEL_RADIUS / ENCODER_COUNT_PER_REVOLUTION;
 
 
     // TODO: Set the init position coordinates and heading.
@@ -39,13 +33,20 @@ public class TankKinematicsLocalization extends OpMode {
     double INITIAL_POS_Y = 0000000000;
     double INITIAL_HEADING = 000000000;
 
+    // TODO: Set the parameters of the IMU.
+    // Here's how
+    // https://ftc-docs.firstinspires.org/en/latest/programming_resources/imu/imu.html
+    final IMU.Parameters imuSystemParameters = null;
 
     /**The localization system.*/
-    TankKinematics odometry;
+    TwoDeadWheelOdometry odometry;
 
-    // The motors whose encoders we will be using.
-    DcMotor leftMotor;
-    DcMotor rightMotor;
+    // The encoders we will be using.
+    DcMotor perpendicularEncoder;
+    DcMotor parallelEncoder;
+
+    // The heading measurement device.
+    IMU imu;
 
     /**The logging system.*/
     Logger logger;
@@ -53,9 +54,15 @@ public class TankKinematicsLocalization extends OpMode {
     @Override
     public void init() {
         // Initializing hardware.
-        leftMotor = hardwareMap.get(DcMotor.class, "left_motor");
-        rightMotor = hardwareMap.get(DcMotor.class, "right_motor");
-        rightMotor.setDirection(DcMotorSimple.Direction.REVERSE);
+        perpendicularEncoder = hardwareMap.get(DcMotor.class, "x_encoder");
+        parallelEncoder = hardwareMap.get(DcMotor.class, "y_encoder");
+
+        // TODO: Reverse if necessary.
+        //parallelEncoder.setDirection(DcMotorSimple.Direction.REVERSE);
+        //perpendicularEncoder.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        imu = hardwareMap.get(IMU.class, "imu");
+        imu.initialize(imuSystemParameters);
 
         // Initializing localization system.
 
@@ -67,14 +74,15 @@ public class TankKinematicsLocalization extends OpMode {
                 );
 
         // Initializing the measurement provider for the localization system.
-        TankKinematics.MeasurementProvider measurementProvider = new TankKinematics.MeasurementProvider(
-                leftMotor::getCurrentPosition,
-                rightMotor::getCurrentPosition,
+        TwoDeadWheelOdometry.MeasurementProvider measurementProvider = new TwoDeadWheelOdometry.MeasurementProvider(
+                perpendicularEncoder::getCurrentPosition,
+                parallelEncoder::getCurrentPosition,
+                imu.getRobotYawPitchRollAngles()::getYaw,
                 TICKS_TO_LINEAR_DISTANCE
         );
 
         // Initializing the localization system itself.
-        odometry = new TankKinematics(initialRobotPosition, INITIAL_HEADING, TRACK_WIDTH, measurementProvider);
+        odometry = new TwoDeadWheelOdometry(initialRobotPosition, INITIAL_HEADING, measurementProvider);
 
         // Initializing localization system logging;\.
         logger = Debuggers.getGlobalLogger();
